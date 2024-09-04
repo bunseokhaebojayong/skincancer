@@ -6,12 +6,12 @@ import pandas as pd
 import os
 from time import time
 from tqdm import tqdm
-from model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit, SkinCoat
+from multiquant_model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit, SkinCoat
 from multi_utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
 import gc
 from colorama import Fore, Back, Style
 from torcheval.metrics.functional import binary_auroc
-from inference import inference
+from multi_inference import inference
 from collections import defaultdict
 from copy import deepcopy
 import numpy as np
@@ -19,6 +19,7 @@ import torch.multiprocessing as mp
 import timm
 from torch.nn.parallel import DistributedDataParallel
 import torch.distributed as dist
+import torch.ao.quantization as quant
 
 def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, local_rank):
     
@@ -31,8 +32,8 @@ def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, l
     
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        images = data['image'].to(local_rank, dtype=torch.float32)
-        targets = data['target'].to(local_rank, dtype=torch.float32)
+        images = data['image'].to(local_rank)
+        targets = data['target'].to(local_rank)
         
         batch_size = images.size(0)
         
@@ -186,6 +187,129 @@ def full_train(args):
     history.to_csv("history.csv", index=False)
     
 
+def quant_full_train(args):
+    BASE_DIR = os.path.dirname(__file__)
+    model_dir_path = f'{BASE_DIR}/{args.model_name}'
+    
+    torch.cuda.empty_cache()
+    
+    df = df_preprocess(nfold=args.n_fold, fold=args.fold)
+    
+    args.global_rank = int(os.environ['RANK'])
+    args.local_rank = int(os.environ['LOCAL_RANK'])
+    args.world_size = int(os.environ['WORLD_SIZE'])
+    
+    torch.cuda.set_device(args.local_rank)
+    
+    if args.global_rank is not None and args.local_rank is not None:
+        print('Use GPU [{}/{}] for training'.format(args.global_rank, args.local_rank))
+    
+    
+    dist.init_process_group(backend='nccl')
+    
+    dist.barrier()
+    
+    # num_worker 문제 방지를 위해 데이터로더를 먼저 불러온다.
+    num_workers = torch.cuda.device_count() * 4
+    train_loader, valid_loader, train_sampler = prepare_loaders(df, args.t_batch_size, args.v_batch_size, args.img_size, 
+                                                 num_workers, args.world_size, args.fold)
+    
+    if args.model_name in get_vit_model_list():
+        model = ViTSkinModel(model_name=args.model_name, pretrained=True, 
+                      checkpoint_path=None)
+    elif args.model_name in get_efficient_model_list():
+        model = SkinModel(model_name=args.model_name, pretrained=True, 
+                      checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('*convnext*', pretrained=True):
+        model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
+        model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('**coat**', pretrained=True):
+        model = SkinCoat(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
+    
+    
+    model.cuda(args.local_rank)
+    model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=1) # 출력은 하나로 모으기
+    
+    
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.w_decay)
+
+    # scheduler 설정
+    def set_lr_scheduler(lr_scheduler, optimizer):
+        if lr_scheduler == 'cosine':
+            T_max = args.t_max
+            min_lr = args.min_lr
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max, min_lr)
+        elif lr_scheduler == 'cosine-warm':
+            T_0 = args.t_0
+            scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0)
+        return scheduler
+    scheduler = set_lr_scheduler(args.lr_scheduler, optimizer)
+    
+    
+    num_epoch = args.num_epoch
+    
+    
+    start = time()
+    best_model_wts = deepcopy(model.state_dict())
+    best_epoch_auroc = -np.inf
+    history = defaultdict(list)
+    best_record = defaultdict(list)
+    
+    # Make a directory for saved model
+    if not os.path.exists(model_dir_path):
+        os.mkdir(model_dir_path)
+    
+    # Quantization : Quantization Aware Training
+    model.apply(quant.enable_observer)
+    model.apply(quant.enable_fake_quant)
+    for epoch in range(1, num_epoch + 1):
+        gc.collect()
+        
+        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank)
+        quantized_model = quant.convert(deepcopy(model).eval(), inplace=False)
+        val_loss, val_auc = inference(quantized_model, optimizer, valid_loader, epoch, args.local_rank)
+        
+        history['epoch'].append(epoch)
+        history['train_loss'].append(train_loss)
+        history['val_loss'].append(val_loss)
+        history['train_auc'].append(train_auc)
+        history['val_auc'].append(val_auc)
+        history['lr'].append(scheduler.get_lr()[0])
+        
+        # deep copy the model
+        if best_epoch_auroc <= val_auc:
+            print(f"{b_}Validation AUROC Improved ({best_epoch_auroc} ---> {val_auc})")
+            best_epoch_auroc = val_auc
+            best_model_wts = deepcopy(model.state_dict())
+            
+            
+            # Record Best record! 
+            best_record['model_name'].append(args.model_name)
+            best_record['epoch'].append(epoch)
+            best_record['val_loss'].append(val_loss)
+            best_record['val_auc'].append(val_auc)
+            model_save_path = f'{model_dir_path}/quant_auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
+            
+            torch.save(best_model_wts, model_save_path)
+            
+            # Save a model file from the current directory
+            print(f'Quantized Model Saved!{sr_}')
+            
+        print()
+        
+    end = time()
+    time_elapsed = end - start
+    
+    # Write the best record from the model
+    best_record_csv = pd.DataFrame.from_dict(best_record)
+    best_record_csv.to_csv("best_record.csv", mode='a', index=False)
+    
+    print(f'Train has completed in {(time_elapsed // 3600):.0f}h:{((time_elapsed % 3600) // 60):.0f}m:{((time_elapsed % 3600) % 60):.0f}s')
+    print(f'Best AUROC : {best_epoch_auroc:.4f}')
+    
+    history = pd.DataFrame.from_dict(history)
+    history.to_csv("history.csv", index=False)
     
 if __name__ == '__main__':
     # base directory
@@ -222,11 +346,15 @@ if __name__ == '__main__':
     parser.add_argument('--fold', default=0, type=int, help='fold')
     parser.add_argument('--n_fold', default=5, type=int, help='n_fold')
     parser.add_argument('--n_accumulate', default=1, type=int, help='n_accumulate')
+    parser.add_argument('--quant', default=False, type=bool, help='Quantization option')
     
     args = parser.parse_args()
     set_seed(args.seed)
     
-    full_train(args)
+    if args.quant is True:
+        quant_full_train(args)
+    else:
+        full_train(args)
 
 
     

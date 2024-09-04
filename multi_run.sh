@@ -13,5 +13,6 @@ torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --m
 --fold 0 \
 --n_fold 5 \
 --t_0 12 \
---n_accumulate 1
+--n_accumulate 1 \
+--quant True
 

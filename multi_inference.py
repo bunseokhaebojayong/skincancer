@@ -16,8 +16,8 @@ def inference(model, optimizer, dataloader, epoch, local_rank):
     import pdb; pdb.set_trace()
     for step, data in bar:
         
-        images = data['image'].to(local_rank, dtype=torch.float32)
-        targets = data['target'].to(local_rank, dtype=torch.float32)
+        images = data['image'].to(local_rank)
+        targets = data['target'].to(local_rank)
 
         batch_size = images.size(0)
 
