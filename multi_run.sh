@@ -1,4 +1,4 @@
-torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --master_port 3000 train.py \
+torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --master_port 3000 multi_train.py \
 --seed 22 \
 --model_name "coatnet_2_rw_224.sw_in12k_ft_in1k" \
 --img_size 224 \

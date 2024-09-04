@@ -1,5 +1,5 @@
 import torch
-from utils import criterion
+from multi_utils import criterion
 from torcheval.metrics.functional import binary_auroc
 from tqdm import tqdm
 import gc

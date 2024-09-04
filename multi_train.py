@@ -7,7 +7,7 @@ import os
 from time import time
 from tqdm import tqdm
 from model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit, SkinCoat
-from utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
+from multi_utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
 import gc
 from colorama import Fore, Back, Style
 from torcheval.metrics.functional import binary_auroc
