@@ -88,6 +88,26 @@ class SkinMaxVit(nn.Module):
         output = self.linear(output)
         return output
             
+'''
+SkinCoat
+'''
+class SkinCoat(nn.Module):
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None):
+        super(SkinCoat, self).__init__()
+        self.model = timm.create_model(model_name, pretrained=pretrained, 
+                                        checkpoint_path=checkpoint_path)
+        self.num_classes = num_classes
+        self.model.global_pool = nn.Identity()
+        self.pooling = GeM()
+        self.model.head.fc = nn.Linear(self.model.head.fc.in_features, num_classes)
+    
+    def forward(self, images):
+        output = self.model(images).squeeze(1)
+        import pdb; pdb.set_trace()
+        output = output.squeeze(1)
+        output=self.pooling(output).flatten(1)
+        output = self.linear(output)
+        return output
 
     
 
