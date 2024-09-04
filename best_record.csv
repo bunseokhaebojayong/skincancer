@@ -1,0 +1,14 @@
+model_name,epoch,val_loss,val_auc
+vit_mediumd_patch16_reg4_gap_256,1,12.736107200654907,0.4970201527006926
+vit_mediumd_patch16_reg4_gap_256,2,12.736107200654907,0.4988133351462935
+vit_mediumd_patch16_reg4_gap_256,3,12.736107200654907,0.49955170438859975
+vit_mediumd_patch16_reg4_gap_256,4,12.736107200654907,0.501661330795189
+model_name,epoch,val_loss,val_auc
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,1,12.736107200654907,0.5008174802325533
+model_name,epoch,val_loss,val_auc
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,1,12.735382911871593,0.5009757022130475
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,2,12.759567029688446,0.501661330795189
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,4,12.734003835270292,0.5021887373968364
+model_name,epoch,val_loss,val_auc
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,1,12.735071784145973,0.502083256076507
+vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k,2,12.730901726226529,0.5030325879594721
