@@ -100,7 +100,7 @@ class SkinCoat(nn.Module):
         self.model.classifier = nn.Identity()
         self.model.global_pool = nn.Identity()
         self.pooling = GeM()
-        self.linear = nn.Linear(self.model.fc2.out_features, num_classes)
+        self.linear = nn.Linear( self.model.head.in_features, num_classes)
     
     def forward(self, images):
         output = self.model(images)

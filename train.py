@@ -121,8 +121,8 @@ if __name__ == '__main__':
         model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None)
     elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
         model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**coat**', pretrained=False):
-        model = SkinCoat(model_name=args.model_name, pretrained=False, checkpoint_path=None)
+    elif args.model_name in timm.list_models('**coat**', pretrained=True):
+        model = SkinCoat(model_name=args.model_name, pretrained=True, checkpoint_path=None)
     
     model.to('cuda')
     
