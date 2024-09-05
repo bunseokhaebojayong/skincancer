@@ -1,6 +1,6 @@
 python train.py \
 --seed 22 \
---model_name "coatnet_rmlp_2_rw_224.sw_in1k" \
+--model_name "swin_large_patch4_window7_224.ms_in22k_ft_in1k" \
 --img_size 224 \
 --num_epoch 50 \
 --t_batch_size 64 \

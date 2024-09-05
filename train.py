@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from time import time
 from tqdm import tqdm
-from model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit, SkinCoat
+from model import SkinModel, ViTSkinModel, Swin
 from utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
 import gc
 from colorama import Fore, Back, Style
@@ -117,12 +117,8 @@ if __name__ == '__main__':
     elif args.model_name in get_efficient_model_list():
         model = SkinModel(model_name=args.model_name, pretrained=True, 
                       checkpoint_path=None)
-    elif args.model_name in timm.list_models('*convnext*', pretrained=True):
-        model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
-        model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**coat**', pretrained=True):
-        model = SkinCoat(model_name=args.model_name, pretrained=True, checkpoint_path=None)
+    elif args.model_name in timm.list_models('*swin*', pretrained=True):
+        model = Swin(model_name=args.model_name, pretrained=True, checkpoint_path=None)
     
     model.to('cuda')
     
