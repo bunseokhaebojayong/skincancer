@@ -21,7 +21,7 @@ from torch.nn.parallel import DistributedDataParallel
 import torch.distributed as dist
 import torch.ao.quantization as quant
 
-def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, local_rank):
+def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, local_rank, n_accumulate):
     
     model.train()
     train_sampler.set_epoch(epoch)
@@ -40,15 +40,18 @@ def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, l
         outputs = model(images).squeeze()
         loss = criterion(outputs, targets)
         
-        # gradient acculmuation 사용 시 코드 추가할 것
-        # loss = loss / grad_accul
+        loss = loss / n_accumulate
         
         loss.backward()
         
-        optimizer.step()
-        
-        if scheduler is not None:
-            scheduler.step()
+        if (step+1) % n_accumulate == 0:
+            optimizer.step()
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            
+            if scheduler is not None:
+                scheduler.step()
         
         auroc = binary_auroc(input=outputs.squeeze(), target=targets).item()
         
@@ -142,7 +145,8 @@ def full_train(args):
     for epoch in range(1, num_epoch + 1):
         gc.collect()
         
-        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank)
+        n_accumulate = args.n_acumulate
+        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank, n_accumulate)
         val_loss, val_auc = inference(model, optimizer, valid_loader, epoch, args.local_rank)
         
         history['epoch'].append(epoch)

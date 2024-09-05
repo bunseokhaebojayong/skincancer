@@ -6,7 +6,7 @@ import pandas as pd
 import os
 from time import time
 from tqdm import tqdm
-from model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit
+from model import SkinModel, ViTSkinModel, SkinConvNext, SkinMaxVit, SkinCoat
 from utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
 import gc
 from colorama import Fore, Back, Style
@@ -17,7 +17,7 @@ from copy import deepcopy
 import numpy as np
 import timm
 
-def train_model(model, optimizer, scheduler, dataloader, epoch):
+def train_model(model, optimizer, scheduler, dataloader, epoch, n_accumulate=1):
     
     model.train()
     
@@ -35,15 +35,18 @@ def train_model(model, optimizer, scheduler, dataloader, epoch):
         outputs = model(images).squeeze()
         loss = criterion(outputs, targets)
         
-        # gradient acculmuation 사용 시 코드 추가할 것
-        # loss = loss / grad_accul
+        loss = loss / n_accumulate
         
         loss.backward()
         
-        optimizer.step()
-        
-        if scheduler is not None:
-            scheduler.step()
+        if (step+1) % n_accumulate == 0:
+            optimizer.step()
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            
+            if scheduler is not None:
+                scheduler.step()
         
         auroc = binary_auroc(input=outputs.squeeze(), target=targets).item()
         
@@ -115,8 +118,10 @@ if __name__ == '__main__':
                       checkpoint_path=None)
     elif args.model_name in timm.list_models('*convnext*', pretrained=True):
         model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**maxvit**', pretrained=True) or args.model_name in timm.list_models('**coat**', pretrained=True):
+    elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
         model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None)
+    elif args.model_name in timm.list_models('**coat**', pretrained=False):
+        model = SkinCoat(model_name=args.model_name, pretrained=False, checkpoint_path=None)
     
     model.to('cuda')
     
@@ -147,6 +152,8 @@ if __name__ == '__main__':
     history = defaultdict(list)
     best_record = defaultdict(list)
     
+    n_accumulate = args.n_acumulate
+    
     # Make a directory for saved model
     if not os.path.exists(model_dir_path):
         os.mkdir(model_dir_path)
@@ -154,7 +161,7 @@ if __name__ == '__main__':
     for epoch in range(1, num_epoch + 1):
         gc.collect()
         
-        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch)
+        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, n_accumulate)
         val_loss, val_auc = inference(model, optimizer, valid_loader, epoch)
         
         history['epoch'].append(epoch)
