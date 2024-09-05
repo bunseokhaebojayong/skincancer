@@ -66,6 +66,7 @@ def train_model(model, optimizer, scheduler, dataloader, epoch, n_accumulate=1):
 
     
 if __name__ == '__main__':
+    
     # base directory
     BASE_DIR = os.path.dirname(__file__)
 
@@ -144,15 +145,14 @@ if __name__ == '__main__':
     
     train_loader, valid_loader = prepare_loaders(df, args.t_batch_size, args.v_batch_size, args.img_size, args.fold)
     num_epoch = args.num_epoch
-    
-    
+        
     start = time()
     best_model_wts = deepcopy(model.state_dict())
     best_epoch_auroc = -np.inf
     history = defaultdict(list)
     best_record = defaultdict(list)
     
-    n_accumulate = args.n_acumulate
+    n_accumulate = args.n_accumulate
     
     # Make a directory for saved model
     if not os.path.exists(model_dir_path):

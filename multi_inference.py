@@ -13,11 +13,10 @@ def inference(model, optimizer, dataloader, epoch, local_rank):
     running_auroc = 0.0
     
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
-    import pdb; pdb.set_trace()
     for step, data in bar:
         
-        images = data['image'].to(local_rank)
-        targets = data['target'].to(local_rank)
+        images = data['image'].to(local_rank, dtype=torch.float32)
+        targets = data['target'].to(local_rank, dtype=torch.float32)
 
         batch_size = images.size(0)
 

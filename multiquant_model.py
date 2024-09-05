@@ -29,7 +29,8 @@ class SkinModel(nn.Module):
 
         
     def forward(self, images):
-        output = self.quant(output)
+        if self.is_quant is True:
+            output = self.quant(output)
         output = self.model(images)
         output=self.pooling(output).flatten(1)
         output = self.linear(output)

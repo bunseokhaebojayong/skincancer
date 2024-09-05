@@ -1,6 +1,6 @@
-CUDA_VISIBLE_DEVICES=2 python train.py \
+accelerator launch train.py \
 --seed 22 \
---model_name "coatnet_2_rw_224" \
+--model_name "tf_efficientnetv2_m.in21k" \
 --img_size 224 \
 --num_epoch 50 \
 --t_batch_size 8 \

@@ -21,6 +21,7 @@ from torch.nn.parallel import DistributedDataParallel
 import torch.distributed as dist
 import torch.ao.quantization as quant
 
+
 def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, local_rank, n_accumulate):
     
     model.train()
@@ -32,8 +33,8 @@ def train_model(model, optimizer, scheduler, dataloader, epoch, train_sampler, l
     
     bar = tqdm(enumerate(dataloader), total=len(dataloader))
     for step, data in bar:
-        images = data['image'].to(local_rank)
-        targets = data['target'].to(local_rank)
+        images = data['image'].to(local_rank, dtype=torch.float32)
+        targets = data['target'].to(local_rank, dtype=torch.float32)
         
         batch_size = images.size(0)
         
@@ -145,7 +146,7 @@ def full_train(args):
     for epoch in range(1, num_epoch + 1):
         gc.collect()
         
-        n_accumulate = args.n_acumulate
+        n_accumulate = args.n_accumulate
         train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank, n_accumulate)
         val_loss, val_auc = inference(model, optimizer, valid_loader, epoch, args.local_rank)
         
@@ -160,7 +161,7 @@ def full_train(args):
         if best_epoch_auroc <= val_auc:
             print(f"{b_}Validation AUROC Improved ({best_epoch_auroc} ---> {val_auc})")
             best_epoch_auroc = val_auc
-            best_model_wts = deepcopy(model.state_dict())
+            best_model_wts = deepcopy(model.module.state_dict())
             
             
             # Record Best record! 
@@ -168,12 +169,13 @@ def full_train(args):
             best_record['epoch'].append(epoch)
             best_record['val_loss'].append(val_loss)
             best_record['val_auc'].append(val_auc)
-            model_save_path = f'{model_dir_path}/auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
+            if args.local_rank == 0:
+                model_save_path = f'{model_dir_path}/auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
             
-            torch.save(best_model_wts, model_save_path)
-            
-            # Save a model file from the current directory
-            print(f'Model Saved!{sr_}')
+                torch.save(best_model_wts, model_save_path)
+                
+                # Save a model file from the current directory
+                print(f'Model Saved!{sr_}')
             
         print()
         
@@ -233,7 +235,7 @@ def quant_full_train(args):
     
     
     model.cuda(args.local_rank)
-    model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=1) # 출력은 하나로 모으기
+    model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device='cuda:0') # 출력은 하나로 모으기
     
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.w_decay)
@@ -259,6 +261,7 @@ def quant_full_train(args):
     best_epoch_auroc = -np.inf
     history = defaultdict(list)
     best_record = defaultdict(list)
+    n_accumulate = args.n_accumulate
     
     # Make a directory for saved model
     if not os.path.exists(model_dir_path):
@@ -270,7 +273,7 @@ def quant_full_train(args):
     for epoch in range(1, num_epoch + 1):
         gc.collect()
         
-        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank)
+        train_loss, train_auc = train_model(model, optimizer, scheduler, train_loader, epoch, train_sampler, args.local_rank, n_accumulate)
         quantized_model = quant.convert(deepcopy(model).eval(), inplace=False)
         val_loss, val_auc = inference(quantized_model, optimizer, valid_loader, epoch, args.local_rank)
         
@@ -355,10 +358,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     set_seed(args.seed)
     
-    if args.quant is True:
-        quant_full_train(args)
-    else:
-        full_train(args)
+    full_train(args)
+    # if args.quant is True:
+    #     quant_full_train(args)
+    # elif args.quant is False:
+    #     full_train(args)
 
 
     

@@ -1,6 +1,6 @@
 torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --master_port 3000 multi_train.py \
 --seed 22 \
---model_name "coatnet_2_rw_224.sw_in12k_ft_in1k" \
+--model_name "tf_efficientnetv2_m.in21k" \
 --img_size 224 \
 --num_epoch 50 \
 --t_batch_size 32 \
@@ -14,5 +14,4 @@ torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --m
 --n_fold 5 \
 --t_0 12 \
 --n_accumulate 1 \
---quant True
-
+--quant false
