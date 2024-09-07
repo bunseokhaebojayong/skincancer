@@ -6,8 +6,8 @@ import pandas as pd
 import os
 from time import time
 from tqdm import tqdm
-from model import SkinModel, ViTSkinModel, Swin
-from utils import criterion, prepare_loaders, df_preprocess, set_seed, get_efficient_model_list, get_vit_model_list
+from model import SkinModel, ViTSkinModel
+from utils import criterion, prepare_loaders, df_preprocess, set_seed
 import gc
 from colorama import Fore, Back, Style
 from torcheval.metrics.functional import binary_auroc
@@ -89,6 +89,7 @@ if __name__ == '__main__':
     ## argument 추가
     parser.add_argument('--seed', type=int, help='seed')
     parser.add_argument('--model_name', type=str, help='돌리고자 하는 모델명입니다.')
+    parser.add_argument('--pretrained', type=bool, help='사전훈련여부')
     parser.add_argument('--img_size', type=int, help='image_size')
     parser.add_argument('--num_epoch', type=int, help='epoch steps')
     parser.add_argument('--t_batch_size', type=int, default=32, help='Train batch size')
@@ -111,14 +112,12 @@ if __name__ == '__main__':
     
     df = df_preprocess(nfold=args.n_fold, fold=args.fold)
     
-    if args.model_name in get_vit_model_list():
-        model = ViTSkinModel(model_name=args.model_name, pretrained=True, 
+    if args.model_name in timm.list_models('**vit**', pretrained=args.pretrained):
+        model = ViTSkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None)
-    elif args.model_name in get_efficient_model_list():
-        model = SkinModel(model_name=args.model_name, pretrained=True, 
+    elif args.model_name in timm.list_models('**efficientnet**', pretrained=args.pretrained):
+        model = SkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None)
-    elif args.model_name in timm.list_models('*swin*', pretrained=True):
-        model = Swin(model_name=args.model_name, pretrained=True, checkpoint_path=None)
     
     model.to('cuda')
     
@@ -181,7 +180,7 @@ if __name__ == '__main__':
             best_record['val_auc'].append(val_auc)
             model_save_path = f'{model_dir_path}/auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
             
-            torch.save(model.state_dict(), model_save_path)
+            torch.save(best_model_wts, model_save_path)
             
             # Save a model file from the current directory
             print(f'Model Saved!{sr_}')

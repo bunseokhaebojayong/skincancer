@@ -49,13 +49,13 @@ class ViTSkinModel(nn.Module):
                                        global_pool='', num_classes=0)
         self.softmax = nn.Softmax()
         self.pooling = ViTGeM()
-        self.linear = nn.Linear(self.model.head.in_features, 1)
+        self.linear = nn.Linear(512, 1)
         self.quant = quant.QuantStub()
         self.dequant = quant.DeQuantStub()
             
     def forward(self, images):
         # cls 토큰 뽑아봄
-        output = self.quant(output)
+        # output = self.quant(output)
         output = self.model(images)
         output = self.pooling(output.permute(0, 2, 1)).flatten(1)
         output = self.linear(output)
@@ -148,8 +148,3 @@ class SkinCoat(nn.Module):
         output = self.linear(output)
         return output
     
-
-    
-
-    
-        

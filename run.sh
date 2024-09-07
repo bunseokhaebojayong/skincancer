@@ -1,9 +1,10 @@
 python train.py \
 --seed 22 \
---model_name "swin_large_patch4_window7_224.ms_in22k_ft_in1k" \
---img_size 224 \
+--model_name "tf_efficientnetv2_m.in21k" \
+--pretrained true \
+--img_size 256 \
 --num_epoch 50 \
---t_batch_size 64 \
+--t_batch_size 32 \
 --v_batch_size 64 \
 --lr 1e-4 \
 --lr_scheduler "cosine" \

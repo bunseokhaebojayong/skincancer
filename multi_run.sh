@@ -1,6 +1,7 @@
 torchrun --nnodes=1 --nproc_per_node=4 --node_rank=0 --master_addr=127.0.0.1 --master_port 3000 multi_train.py \
 --seed 22 \
 --model_name "tf_efficientnetv2_m.in21k" \
+--pretrained true \
 --img_size 224 \
 --num_epoch 50 \
 --t_batch_size 32 \

@@ -97,22 +97,16 @@ def full_train(args):
     train_loader, valid_loader, train_sampler = prepare_loaders(df, args.t_batch_size, args.v_batch_size, args.img_size, 
                                                  num_workers, args.world_size, args.fold)
     
-    if args.model_name in get_vit_model_list():
-        model = ViTSkinModel(model_name=args.model_name, pretrained=True, 
+    if args.model_name in timm.list_models('**vit**', pretrained=args.pretrained):
+        model = ViTSkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None)
-    elif args.model_name in get_efficient_model_list():
-        model = SkinModel(model_name=args.model_name, pretrained=True, 
+    elif args.model_name in timm.list_models('**efficientnet**', pretrained=args.pretrained):
+        model = SkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None)
-    elif args.model_name in timm.list_models('*convnext*', pretrained=True):
-        model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
-        model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None)
-    elif args.model_name in timm.list_models('**coat**', pretrained=True):
-        model = SkinCoat(model_name=args.model_name, pretrained=True, checkpoint_path=None)
     
     
     model.cuda(args.local_rank)
-    model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=1) # 출력은 하나로 모으기
+    model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=0) # 출력은 하나로 모으기
     
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.w_decay)
@@ -134,7 +128,7 @@ def full_train(args):
     
     
     start = time()
-    best_model_wts = deepcopy(model.state_dict())
+    best_model_wts = deepcopy(model.module.state_dict())
     best_epoch_auroc = -np.inf
     history = defaultdict(list)
     best_record = defaultdict(list)
@@ -158,7 +152,7 @@ def full_train(args):
         history['lr'].append(scheduler.get_lr()[0])
         
         # deep copy the model
-        if best_epoch_auroc <= val_auc:
+        if best_epoch_auroc <= val_auc and args.local_rank == 0:
             print(f"{b_}Validation AUROC Improved ({best_epoch_auroc} ---> {val_auc})")
             best_epoch_auroc = val_auc
             best_model_wts = deepcopy(model.module.state_dict())
@@ -169,13 +163,13 @@ def full_train(args):
             best_record['epoch'].append(epoch)
             best_record['val_loss'].append(val_loss)
             best_record['val_auc'].append(val_auc)
-            if args.local_rank == 0:
-                model_save_path = f'{model_dir_path}/auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
             
-                torch.save(best_model_wts, model_save_path)
-                
-                # Save a model file from the current directory
-                print(f'Model Saved!{sr_}')
+            model_save_path = f'{model_dir_path}/auc{val_auc}_loss{val_loss}_epoch{epoch}.bin'
+        
+            torch.save(best_model_wts, model_save_path)
+            
+            # Save a model file from the current directory
+            print(f'Model Saved!{sr_}')
             
         print()
         
@@ -220,18 +214,18 @@ def quant_full_train(args):
     train_loader, valid_loader, train_sampler = prepare_loaders(df, args.t_batch_size, args.v_batch_size, args.img_size, 
                                                  num_workers, args.world_size, args.fold)
     
-    if args.model_name in get_vit_model_list():
-        model = ViTSkinModel(model_name=args.model_name, pretrained=True, 
+    if args.model_name in timm.list_models('**vit**', pretrained=args.pretrained):
+        model = ViTSkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None)
-    elif args.model_name in get_efficient_model_list():
-        model = SkinModel(model_name=args.model_name, pretrained=True, 
+    elif args.model_name in timm.list_models('**efficientnet**', pretrained=args.pretrained):
+        model = SkinModel(model_name=args.model_name, pretrained=args.pretrained, 
                       checkpoint_path=None, is_quant=quant)
-    elif args.model_name in timm.list_models('*convnext*', pretrained=True):
-        model = SkinConvNext(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
-    elif args.model_name in timm.list_models('**maxvit**', pretrained=True):
-        model = SkinMaxVit(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
-    elif args.model_name in timm.list_models('**coat**', pretrained=True):
-        model = SkinCoat(model_name=args.model_name, pretrained=True, checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('*convnext*', pretrained=args.pretrained):
+        model = SkinConvNext(model_name=args.model_name, pretrained=args.pretrained, checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('**maxvit**', pretrained=args.pretrained):
+        model = SkinMaxVit(model_name=args.model_name, pretrained=args.pretrained, checkpoint_path=None, is_quant=quant)
+    elif args.model_name in timm.list_models('**coat**', pretrained=args.pretrained):
+        model = SkinCoat(model_name=args.model_name, pretrained=args.pretrained, checkpoint_path=None, is_quant=quant)
     
     
     model.cuda(args.local_rank)
@@ -340,6 +334,7 @@ if __name__ == '__main__':
     parser.add_argument('--global_rank', type=int, default=0)
     parser.add_argument('--seed', type=int, help='seed')
     parser.add_argument('--model_name', type=str, help='돌리고자 하는 모델명입니다.')
+    parser.add_argument('--pretrained', type=bool, help='사전훈련여부')
     parser.add_argument('--img_size', type=int, help='image_size')
     parser.add_argument('--num_epoch', type=int, help='epoch steps')
     parser.add_argument('--t_batch_size', type=int, default=32, help='Train batch size')

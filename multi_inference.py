@@ -32,7 +32,7 @@ def inference(model, optimizer, dataloader, epoch, local_rank):
         epoch_loss = running_loss / dataset_size
         epoch_auroc = running_auroc / dataset_size
         
-        bar.set_postfix(Epoch=epoch, Train_Loss=epoch_loss, Train_Auroc=epoch_auroc,LR=optimizer.param_groups[0]['lr'])
+        bar.set_postfix(epoch=epoch, val_loss=epoch_loss, val_auroc=epoch_auroc,LR=optimizer.param_groups[0]['lr'])
 
     gc.collect() # garbarge collector
 

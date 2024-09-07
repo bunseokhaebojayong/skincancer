@@ -87,23 +87,30 @@ def prepare_loaders(df, train_batch_size, val_batch_size, img_size, fold=0):
     
     data_transforms = {
     "train": A.Compose([
+        A.Transpose(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(limit=0.2, p=0.75),
+        A.OneOf([
+            A.MotionBlur(blur_limit=5),
+            A.MedianBlur(blur_limit=5),
+            A.GaussianBlur(blur_limit=5),
+            A.GaussNoise(var_limit=(5.0, 30.0)),
+            ], p=0.7),
+        A.CLAHE(clip_limit=4.0, p=0.7),
         A.Resize(img_size, img_size),
         A.RandomRotate90(p=0.5),
         A.Flip(p=0.5),
         A.Downscale(p=0.25),
         A.ShiftScaleRotate(shift_limit=0.1, 
                            scale_limit=0.15, 
-                           rotate_limit=60, 
-                           p=0.5),
+                           rotate_limit=15,
+                           border_mode=0,
+                           p=0.85),
         A.HueSaturationValue(
-                hue_shift_limit=0.2, 
-                sat_shift_limit=0.2, 
-                val_shift_limit=0.2, 
-                p=0.5
-            ),
-        A.RandomBrightnessContrast(
-                brightness_limit=(-0.1,0.1), 
-                contrast_limit=(-0.1, 0.1), 
+                hue_shift_limit=10, 
+                sat_shift_limit=20, 
+                val_shift_limit=10, 
                 p=0.5
             ),
         A.Normalize(
@@ -138,120 +145,37 @@ def prepare_loaders(df, train_batch_size, val_batch_size, img_size, fold=0):
 def df_preprocess(nfold, fold):
     path = Path('../data')
     train_img_path = path /'train-image/image'
-    train_csv = pd.read_csv(path / 'train-metadata.csv', low_memory=False)
+    train_images = glob(str(train_img_path) + '/*')
     
+    train = pd.read_csv(path / 'train-metadata.csv', low_memory=False)
+    train_df1 = pd.read_csv(path / 'train_2019.csv', low_memory=False)
+    train_df2 = pd.read_csv(path / 'train_mealanoma.csv', low_memory=False)
+    
+    # Count the Images
     def get_img_path(image_id):
         return f"{train_img_path}/{image_id}.jpg"
 
-    # Count the Images
-    train_img_path = path / 'train-image/image'
-    train_images = glob(str(train_img_path) + '/*')
+    train_df1.rename(columns={'image_name':'isic_id'}, inplace=True)
+    train_df2.rename(columns={'image_name':'isic_id'}, inplace=True)
 
-    df_positive = train_csv[train_csv["target"] == 1].reset_index(drop=True)
-    df_negative = train_csv[train_csv["target"] == 0].reset_index(drop=True)
 
-    print(f"Total num of train_img set: {len(train_images)}")
-    print(f'Train metadata shape : {train_csv.shape}')
-    print(f'sum of the targets: {train_csv.target.sum()}')
-    print(f'{train_csv["patient_id"].unique().shape}')
-    print(df_positive.shape)
-    print(df_negative.shape)
+    train_df1_positive = train_df1[train_df1["target"] == 1].reset_index(drop=True)
+    train_df2_positive = train_df2[train_df2['target'] == 1].reset_index(drop=True)
+    train_positive = train[train['target'] == 1].reset_index(drop=True)
+    train_negative = train[train["target"] == 0].reset_index(drop=True)
 
-    # 비율 맞추기(baseline 참고시 1: 20으로 했는데 좀 아이디어 있으면 고치시면 됩니다!)
-    # 데이터 불균형 존재
-    df = pd.concat([df_positive, df_negative.iloc[:df_positive.shape[0]*20, :]])
-    print("filtered>", df.shape, df.target.sum(), df["patient_id"].unique().shape)
+    train_positive_df = pd.concat([train_df1_positive, train_df2_positive, train_positive],axis=0, ignore_index=True)
+    train_positive_df.isna().sum()
+
+    df = pd.concat([train_positive_df, train_negative.iloc[:train_positive_df.shape[0] :]])
+
     df['file_path'] = df['isic_id'].apply(get_img_path)
     df = df[ df["file_path"].isin(train_images) ].reset_index(drop=True)
-    
+
+
     sgkf = StratifiedGroupKFold(n_splits=nfold)
 
     for fold, ( _, val_) in enumerate(sgkf.split(df, df.target,df.patient_id)):
         df.loc[val_ , "kfold"] = int(fold)
-    return df
-        
 
-def get_efficient_model_list():
-    return [
-'efficientnet_b0',
- 'efficientnet_b0_g8_gn',
- 'efficientnet_b0_g16_evos',
- 'efficientnet_b0_gn',
- 'efficientnet_b1',
- 'efficientnet_b1_pruned',
- 'efficientnet_b2',
- 'efficientnet_b2_pruned',
- 'efficientnet_b3',
- 'efficientnet_b3_g8_gn',
- 'efficientnet_b3_gn',
- 'efficientnet_b3_pruned',
- 'efficientnet_b4',
- 'efficientnet_b5',
- 'efficientnet_b6',
- 'efficientnet_b7',
- 'efficientnet_b8',
- 'efficientnet_blur_b0',
- 'efficientnet_cc_b0_4e',
- 'efficientnet_cc_b0_8e',
- 'efficientnet_cc_b1_8e',
- 'efficientnet_el',
- 'efficientnet_el_pruned',
- 'efficientnet_em',
- 'efficientnet_es',
- 'efficientnet_es_pruned',
- 'efficientnet_h_b5',
- 'efficientnet_l2',
- 'efficientnet_lite0',
- 'efficientnet_lite1',
- 'efficientnet_lite2',
- 'efficientnet_lite3',
- 'efficientnet_lite4',
- 'efficientnet_x_b3',
- 'efficientnet_x_b5',
- 'efficientnetv2_l',
- 'efficientnetv2_m',
- 'efficientnetv2_rw_m',
- 'efficientnetv2_rw_s',
- 'efficientnetv2_rw_t',
- 'efficientnetv2_s',
- 'efficientnetv2_xl',
- 'gc_efficientnetv2_rw_t',
- 'test_efficientnet',
- 'tf_efficientnet_b0',
- 'tf_efficientnet_b1',
- 'tf_efficientnet_b2',
- 'tf_efficientnet_b3',
- 'tf_efficientnet_b4',
- 'tf_efficientnet_b5',
- 'tf_efficientnet_b6',
- 'tf_efficientnet_b7',
- 'tf_efficientnet_b8',
- 'tf_efficientnet_cc_b0_4e',
- 'tf_efficientnet_cc_b0_8e',
- 'tf_efficientnet_cc_b1_8e',
- 'tf_efficientnet_el',
- 'tf_efficientnet_em',
- 'tf_efficientnet_es',
- 'tf_efficientnet_l2',
- 'tf_efficientnet_lite0',
- 'tf_efficientnet_lite1',
- 'tf_efficientnet_lite2',
- 'tf_efficientnet_lite3',
- 'tf_efficientnet_lite4',
- 'tf_efficientnetv2_b0',
- 'tf_efficientnetv2_b1',
- 'tf_efficientnetv2_b2',
- 'tf_efficientnetv2_b3',
- 'tf_efficientnetv2_l',
- 'tf_efficientnetv2_m',
- 'tf_efficientnetv2_s',
- 'tf_efficientnetv2_xl',
- 'efficientnet_b1.ra4_e3600_r240_in1k',
- 'tf_efficientnetv2_l.in21k',
- 'tf_efficientnetv2_m.in21k'
-]
-    
-def get_vit_model_list():
-    return ['vit_medium_patch16_reg4_gap_256',
-            'vit_mediumd_patch16_reg4_gap_384.sbb2_e200_in12k_ft_in1k',
-            'vit_mediumd_patch16_reg4_gap_256.sbb2_e200_in12k_ft_in1k']
+    return df  

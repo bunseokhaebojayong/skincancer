@@ -88,23 +88,30 @@ def prepare_loaders(df, train_batch_size, val_batch_size, img_size, num_workers,
     
     data_transforms = {
     "train": A.Compose([
+        A.Transpose(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(limit=0.2, p=0.75),
+        A.OneOf([
+            A.MotionBlur(blur_limit=5),
+            A.MedianBlur(blur_limit=5),
+            A.GaussianBlur(blur_limit=5),
+            A.GaussNoise(var_limit=(5.0, 30.0)),
+            ], p=0.7),
+        A.CLAHE(clip_limit=4.0, p=0.7),
         A.Resize(img_size, img_size),
         A.RandomRotate90(p=0.5),
         A.Flip(p=0.5),
         A.Downscale(p=0.25),
         A.ShiftScaleRotate(shift_limit=0.1, 
                            scale_limit=0.15, 
-                           rotate_limit=60, 
-                           p=0.5),
+                           rotate_limit=15,
+                           border_mode=0,
+                           p=0.85),
         A.HueSaturationValue(
-                hue_shift_limit=0.2, 
-                sat_shift_limit=0.2, 
-                val_shift_limit=0.2, 
-                p=0.5
-            ),
-        A.RandomBrightnessContrast(
-                brightness_limit=(-0.1,0.1), 
-                contrast_limit=(-0.1, 0.1), 
+                hue_shift_limit=10, 
+                sat_shift_limit=20, 
+                val_shift_limit=10, 
                 p=0.5
             ),
         A.Normalize(
@@ -125,6 +132,7 @@ def prepare_loaders(df, train_batch_size, val_batch_size, img_size, num_workers,
             ),
         ToTensorV2()], p=1.)
     }
+
     
     train_dataset = SkinDataSet(df_train, cat='train', transforms=data_transforms['train'])
     valid_dataset = SkinDataSet(df_valid, cat='valid', transforms=data_transforms['valid'])
@@ -144,38 +152,40 @@ def prepare_loaders(df, train_batch_size, val_batch_size, img_size, num_workers,
 def df_preprocess(nfold, fold):
     path = Path('../data')
     train_img_path = path /'train-image/image'
-    train_csv = pd.read_csv(path / 'train-metadata.csv', low_memory=False)
+    train_images = glob(str(train_img_path) + '/*')
     
+    train = pd.read_csv(path / 'train-metadata.csv', low_memory=False)
+    train_df1 = pd.read_csv(path / 'train_2019.csv', low_memory=False)
+    train_df2 = pd.read_csv(path / 'train_mealanoma.csv', low_memory=False)
+    
+    # Count the Images
     def get_img_path(image_id):
         return f"{train_img_path}/{image_id}.jpg"
 
-    # Count the Images
-    train_img_path = path / 'train-image/image'
-    train_images = glob(str(train_img_path) + '/*')
+    train_df1.rename(columns={'image_name':'isic_id'}, inplace=True)
+    train_df2.rename(columns={'image_name':'isic_id'}, inplace=True)
 
-    df_positive = train_csv[train_csv["target"] == 1].reset_index(drop=True)
-    df_negative = train_csv[train_csv["target"] == 0].reset_index(drop=True)
 
-    print(f"Total num of train_img set: {len(train_images)}")
-    print(f'Train metadata shape : {train_csv.shape}')
-    print(f'sum of the targets: {train_csv.target.sum()}')
-    print(f'{train_csv["patient_id"].unique().shape}')
-    print(df_positive.shape)
-    print(df_negative.shape)
+    train_df1_positive = train_df1[train_df1["target"] == 1].reset_index(drop=True)
+    train_df2_positive = train_df2[train_df2['target'] == 1].reset_index(drop=True)
+    train_positive = train[train['target'] == 1].reset_index(drop=True)
+    train_negative = train[train["target"] == 0].reset_index(drop=True)
 
-    # 비율 맞추기(baseline 참고시 1: 20으로 했는데 좀 아이디어 있으면 고치시면 됩니다!)
-    # 데이터 불균형 존재
-    df = pd.concat([df_positive, df_negative.iloc[:df_positive.shape[0]*20, :]])
-    print("filtered>", df.shape, df.target.sum(), df["patient_id"].unique().shape)
+    train_positive_df = pd.concat([train_df1_positive, train_df2_positive, train_positive],axis=0, ignore_index=True)
+    train_positive_df.isna().sum()
+
+    df = pd.concat([train_positive_df, train_negative.iloc[:train_positive_df.shape[0] :]])
+
     df['file_path'] = df['isic_id'].apply(get_img_path)
     df = df[ df["file_path"].isin(train_images) ].reset_index(drop=True)
-    
+
+
     sgkf = StratifiedGroupKFold(n_splits=nfold)
 
     for fold, ( _, val_) in enumerate(sgkf.split(df, df.target,df.patient_id)):
         df.loc[val_ , "kfold"] = int(fold)
-    return df
-        
+
+    return df 
 
 def get_efficient_model_list():
     return [
