@@ -4,6 +4,9 @@
 안녕하세요. 저희는 분석해보자옹 팀입니다!
 ISIC 2024 대회를 준비하면서 저희가 학습 서버에서 시도해봤던 흔적들입니다.
 
+## 팀 구성원
+이세민, 이예빛, 유창준, 조수민, 조현지
+
 - best_record.csv : Epoch 별로 가장 좋은 auc와 loss 결과를 모델별로 기록해 둔 csv 파일입니다
 - check_transferlearning_timm.py : 모델 확인 코드입니다.
 - concat1-save-csv-file : training한 모델의 결과를 메타데이터에 추가한 결과입니다
