@@ -47,7 +47,6 @@ class ViTSkinModel(nn.Module):
         output = self.pooling(output.permute(0, 2, 1)).flatten(1)
         output = self.linear(output)
         
-        # softmax는 훈련시에 안 먹고 추론시에 사용할 것.
         return output
 
 
