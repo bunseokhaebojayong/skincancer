@@ -37,7 +37,6 @@ class ViTSkinModel(nn.Module):
         self.model = timm.create_model(model_name, pretrained=pretrained, 
                                        checkpoint_path=checkpoint_path,
                                        global_pool='', num_classes=0)
-        self.softmax = nn.Softmax()
         self.pooling = ViTGeM()
         self.linear = nn.Linear(self.model.head.in_features, 1)
             
